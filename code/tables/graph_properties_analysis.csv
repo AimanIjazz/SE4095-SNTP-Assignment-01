@@ -1,0 +1,2 @@
+nodes,edges,density,num_wcc,num_scc,largest_scc_fraction,mean_in_degree,mean_out_degree,median_in_degree,median_out_degree,max_in_degree,max_out_degree
+1222,19021,0.012748129769406365,1,420,0.648936170212766,15.565466448445171,15.565466448445171,3.0,7.0,337,256

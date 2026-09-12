@@ -1,0 +1,24 @@
+{
+  "raw_nodes": 1490,
+  "raw_edges": 19090,
+  "self_loops_removed": 3,
+  "duplicate_pairs": 65,
+  "duplicate_edge_instances_removed": 65,
+  "nodes_missing_orientation_label": 0,
+  "cleaned_full_nodes": 1490,
+  "cleaned_full_edges": 19022,
+  "isolates": 266,
+  "num_weakly_connected_components": 268,
+  "wcc_sizes_top5": [
+    1222,
+    2,
+    1,
+    1,
+    1
+  ],
+  "num_strongly_connected_components": 688,
+  "largest_scc_size": 793,
+  "analysis_graph_nodes": 1222,
+  "analysis_graph_edges": 19021,
+  "nodes_excluded_isolates_and_small_components": 268
+}

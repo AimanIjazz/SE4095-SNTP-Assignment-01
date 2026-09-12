@@ -1,0 +1,444 @@
+\documentclass[10pt,twocolumn]{article}
+\usepackage[a4paper,top=1.9cm,bottom=2.2cm,left=1.7cm,right=1.7cm,columnsep=0.6cm]{geometry}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{abstract}
+\usepackage{fancyhdr}
+
+\graphicspath{{../figures/}}
+
+\hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\Roman{section}.}{0.6em}{}
+\titleformat{\subsection}{\normalfont\bfseries}{\Alph{subsection}.}{0.5em}{}
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont\itshape}
+\setlength{\absleftindent}{0.5cm}
+\setlength{\absrightindent}{0.5cm}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}
+
+\captionsetup[figure]{font=small,labelfont=bf}
+\captionsetup[table]{font=small,labelfont=bf}
+
+\title{\LARGE\bfseries Influence, Brokerage, and Community Structure\\ in the 2004 U.S. Political Blogosphere}
+
+\author{
+  \large Student Name\\[2pt]
+  \normalsize Student ID -- SE4095 Social Network Theory and Practice, Assignment 01
+}
+
+\date{}
+
+\begin{document}
+\twocolumn[
+  \begin{@twocolumnfalse}
+    \maketitle
+    \begin{abstract}
+    This report analyses the political blogosphere hyperlink network compiled by Adamic and Glance
+    (2005) to investigate how influence and brokerage relate to political homophily. The raw graph
+    (1490 nodes, 19{,}090 directed hyperlinks) is cleaned into a simple directed graph and restricted,
+    for all distance-based and structural calculations, to its largest weakly connected component
+    (1222 nodes, 19{,}021 edges). PageRank and betweenness centrality are computed to distinguish
+    cited authority from structural brokerage; the two rankings correlate strongly (Spearman
+    $\rho=0.76$) but agree on only a third of their top-10 nodes. A controlled removal experiment
+    shows that deleting the top 3\% of blogs by betweenness fragments the network into roughly six
+    times as many Louvain communities and sharply reduces agreement with the known political labels,
+    while an equal-size random removal leaves the community structure almost unchanged. Louvain
+    modularity maximisation, run without ever seeing the ground-truth labels, recovers the liberal
+    and conservative divide as two large, $>90\%$-pure communities, evaluated here with a pairwise
+    confusion matrix (accuracy 0.88, F1 0.87 on the original graph) that avoids the community-ID
+    permutation problem entirely.
+    \end{abstract}
+    \vspace{0.6cm}
+  \end{@twocolumnfalse}
+]
+
+\section{Introduction}
+The 2005 Political Blogs dataset~\cite{adamic2005} records hyperlinks among 1490 U.S. political
+blogs crawled around the 2004 presidential election, together with each blog's political
+orientation (liberal or conservative). This report investigates three questions: (1) which blogs
+act as authorities versus brokers in the hyperlink structure; (2) whether removing the network's
+structural brokers destabilises its community structure more than removing an equal number of
+random blogs; and (3) whether an unsupervised, label-free community-detection procedure recovers
+the known political split. Ground-truth orientation labels are preserved throughout but are used
+only in the final evaluation stage, never to construct, tune, or select communities.
+
+\section{Dataset and Graph Construction}
+\label{sec:data}
+
+\subsection{Representation}
+The GML file is loaded as a directed graph: a hyperlink from blog $u$ to blog $v$ is not evidence
+that $v$ links back, and direction is required by both centrality measures used later. Edges are
+treated as unweighted -- the file provides no independently verifiable count of repeated links, so
+edge multiplicity is collapsed into a single boolean ``linked'' relationship rather than used as an
+invented weight.
+
+\subsection{Preprocessing log}
+As distributed, \texttt{polblogs.gml} is a directed \emph{multigraph}, which the standard NetworkX
+GML reader rejects unless \texttt{multigraph~1} is declared in the header -- adding that declaration
+was the first preprocessing action. Table~\ref{tab:preprocess} documents every subsequent decision
+and the resulting graph size at each stage.
+
+\begin{table}[h]
+\centering
+\caption{Preprocessing log (raw file $\rightarrow$ analysis graph)}
+\label{tab:preprocess}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Step & Count \\
+\midrule
+Raw nodes / edges (multigraph) & 1490 / 19{,}090 \\
+Self-loops removed & 3 \\
+Duplicate (source,target) pairs collapsed & 65 \\
+Nodes missing orientation label & 0 \\
+Cleaned simple graph (nodes / edges) & 1490 / 19{,}022 \\
+Isolated nodes & 266 \\
+Weakly connected components & 268 \\
+Largest WCC size & 1222 \\
+Strongly connected components & 688 \\
+Largest SCC size & 793 \\
+\textbf{Analysis graph (largest WCC)} & \textbf{1222 / 19{,}021} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Component choice for distance-based measures}
+The largest strongly connected component covers only 793 of 1490 nodes (53\%), which would discard
+almost half the network. The largest \emph{weakly} connected component (1222 nodes, 65\% of the
+cleaned graph) is used instead for every centrality, community-detection, and pairwise-evaluation
+calculation in this report: it retains every blog reachable through the network in some direction,
+matching the notion of ``part of the same information-flow structure'' better than requiring mutual
+reachability. The 268 excluded nodes are 266 true isolates plus one disconnected pair.
+
+\subsection{Graph properties}
+Table~\ref{tab:props} reports density and degree statistics for the full cleaned graph and the
+1222-node analysis graph used from Section~\ref{sec:centrality} onward.
+
+\begin{table}[h]
+\centering
+\caption{Graph properties}
+\label{tab:props}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Property & Full cleaned & Analysis (LWCC) \\
+\midrule
+Nodes & 1490 & 1222 \\
+Edges & 19{,}022 & 19{,}021 \\
+Density & 0.0086 & 0.0127 \\
+Weakly conn. components & 268 & 1 \\
+Strongly conn. components & 688 & 420 \\
+Largest SCC fraction & 0.53 & 0.65 \\
+Mean in/out-degree & 12.77 & 15.57 \\
+Median in-degree & 2 & 3 \\
+Median out-degree & 4 & 7 \\
+Max in-degree & 337 & 337 \\
+Max out-degree & 256 & 256 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\linewidth]{degree_distribution_analysis_LWCC.png}
+\caption{In- and out-degree distributions of the analysis graph (log-log). Both are heavy-tailed: a
+small number of hub blogs receive the majority of in-links.}
+\label{fig:degdist}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\linewidth]{network_overview_by_orientation.png}
+\caption{Analysis graph coloured by the known (but unused-in-detection) political orientation.
+Colour is descriptive only; no calculation in this report uses it before Section~\ref{sec:eval}.}
+\label{fig:overview}
+\end{figure}
+
+\subsection{Interpretation}
+Figure~\ref{fig:overview} shows two dense, largely separate clusters connected by comparatively few
+cross-links -- a clear visual signature of homophily: blogs overwhelmingly link within their own
+political side. Figure~\ref{fig:degdist} shows heavy-tailed in- and out-degree distributions
+consistent with a small number of highly visible blogs dominating attention while most blogs are
+linked to only once or twice.
+
+\section{Centrality Selection and Analysis}
+\label{sec:centrality}
+
+\subsection{Chosen measures and justification}
+Two taught measures are selected: \textbf{PageRank} and \textbf{betweenness centrality}. PageRank is
+the only taught measure built specifically for directed link graphs with divided outgoing influence:
+a link from a blog that cites 300 others counts far less than one from a blog that cites five, a
+distinction plain in-degree cannot make. Betweenness is the only taught measure that scores
+brokerage on shortest paths rather than direct or link-weighted importance -- exactly the property
+needed to design the removal experiment in Section~\ref{sec:experiment}. Both are computed on the
+directed analysis graph with the standard damping factor $\alpha=0.85$ for PageRank (tight
+convergence, $\mathrm{tol}=10^{-10}$) and directed shortest paths for betweenness, where unreachable
+pairs contribute zero, the standard convention for a graph that is only weakly connected.
+
+\begin{table}[h]
+\centering
+\caption{Top-10 blogs by PageRank}
+\label{tab:pr}
+\small
+\begin{tabular}{@{}rlll@{}}
+\toprule
+Rank & Blog & Orientation & PageRank \\
+\midrule
+1 & dailykos.com & liberal & 0.0189 \\
+2 & atrios.blogspot.com & liberal & 0.0160 \\
+3 & instapundit.com & conservative & 0.0133 \\
+4 & blogsforbush.com & conservative & 0.0132 \\
+5 & talkingpointsmemo.com & liberal & 0.0131 \\
+6 & michellemalkin.com & conservative & 0.0115 \\
+7 & drudgereport.com & conservative & 0.0113 \\
+8 & washingtonmonthly.com & liberal & 0.0111 \\
+9 & powerlineblog.com & conservative & 0.0094 \\
+10 & andrewsullivan.com & conservative & 0.0091 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Top-10 blogs by betweenness centrality}
+\label{tab:bc}
+\small
+\begin{tabular}{@{}rlll@{}}
+\toprule
+Rank & Blog & Orientation & Betweenness \\
+\midrule
+1 & blogsforbush.com & conservative & 0.1467 \\
+2 & atrios.blogspot.com & liberal & 0.0611 \\
+3 & instapundit.com & conservative & 0.0512 \\
+4 & dailykos.com & liberal & 0.0369 \\
+5 & newleftblogs.blogspot.com & liberal & 0.0308 \\
+6 & madkane.com/notable.html & liberal & 0.0302 \\
+7 & wizbangblog.com & conservative & 0.0273 \\
+8 & lashawnbarber.com & conservative & 0.0243 \\
+9 & hughhewitt.com & conservative & 0.0230 \\
+10 & washingtonmonthly.com & liberal & 0.0219 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ranking comparison}
+Spearman's rank correlation between the full PageRank and betweenness rankings is
+$\rho = 0.76$ ($p \approx 3\times10^{-228}$) -- a strong positive association, since a blog that
+receives many selective in-links is also likely to lie on many shortest paths. The two rankings are
+nonetheless distinct: only 5 of the top 10 nodes are shared (Jaccard $=0.33$).
+
+\subsection{Node interpretation}
+\textbf{dailykos.com} ranks \#1 by PageRank but only \#4 by betweenness: it is the most-cited
+liberal hub, but so many blogs link to it directly that fewer shortest paths need to route
+\emph{through} it. \textbf{blogsforbush.com} is \#4 by PageRank but \#1 by betweenness by a wide
+margin (0.147, more than double the runner-up) -- it is not the most-cited conservative blog, but it
+appears to be the main crossing point that shortest paths between many liberal and conservative
+blogs are forced through. \textbf{atrios.blogspot.com} ranks highly on both measures (\#2 and \#2),
+combining cited authority with structural bridging, a rarer and arguably more structurally important
+profile than either extreme alone. A high score on either measure describes a blog's position in the
+hyperlink graph, not necessarily its real-world political influence.
+
+\section{Centrality-Informed Community Experiment}
+\label{sec:experiment}
+
+\subsection{Design}
+Betweenness centrality is used as the intervention measure, since Section~\ref{sec:centrality}
+identifies a small set of blogs -- led by blogsforbush.com -- that structurally bridge the two
+political sides. If these blogs are genuinely load-bearing brokers, removing them should fragment
+community structure more than removing an equal number of random blogs. The top 3\% of nodes by
+betweenness (37 of 1222) are removed to build a \emph{targeted} graph, large enough to meaningfully
+stress the network while leaving 97\% intact; a \emph{random} graph removes the same count of nodes
+chosen uniformly at random with a fixed seed (Python \texttt{random.Random(42)}). Both removal
+graphs (1185 nodes each) are evaluated only on their own remaining nodes.
+
+\section{Community Detection}
+\label{sec:community}
+
+\subsection{Method}
+Louvain modularity maximisation~\cite{blondel2008} is used. Louvain assumes disjoint, reasonably
+dense communities and optimises a modularity objective, with no assumption of balanced sizes,
+hierarchy, or overlap; it is defined for undirected graphs. The directed analysis graph is converted
+with an edge kept if a hyperlink exists in either direction -- a deliberate choice, since the
+community question is about mutual reference rather than the direction of any single link, and
+direction was already fully exploited at the centrality stage. Louvain's node-visiting order is
+randomised, so five seeds (0--4) are run for each of the three graphs from Section~\ref{sec:experiment};
+seed 0 is the declared run used for the visualisations and profile table, and mean/standard
+deviation across seeds are reported for every metric.
+
+\subsection{Results across the three graphs}
+Table~\ref{tab:summary} summarises modularity and the external metrics (defined in
+Section~\ref{sec:eval}) across five Louvain seeds for the original graph and both removal
+conditions.
+
+\begin{table}[h]
+\centering
+\caption{Mean $\pm$ std over 5 Louvain seeds}
+\label{tab:summary}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & Original & Targeted rem. & Random rem. \\
+\midrule
+$N$ & 1222 & 1185 & 1185 \\
+\# communities & $10.2\pm1.3$ & $61.0\pm1.2$ & $13.0\pm1.2$ \\
+Modularity & $0.427\pm0.000$ & $0.433\pm0.001$ & $0.423\pm0.001$ \\
+Accuracy & $0.883\pm0.003$ & $0.764\pm0.029$ & $0.878\pm0.002$ \\
+Precision & $0.919\pm0.007$ & $0.912\pm0.009$ & $0.913\pm0.005$ \\
+Recall & $0.842\pm0.003$ & $0.585\pm0.057$ & $0.835\pm0.002$ \\
+F1 & $0.878\pm0.002$ & $0.711\pm0.043$ & $0.872\pm0.002$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Removing the 37 highest-betweenness blogs raises the community count roughly six-fold (10--11 to
+around 60) and collapses recall from $\approx0.84$ to $0.55$--$0.68$: many same-orientation blogs end
+up scattered across small fragments rather than one large community. Removing 37 random blogs barely
+moves any metric. This gap is direct evidence that the highest-betweenness blogs are structurally
+load-bearing: losing them breaks the paths holding each political side together as one community,
+whereas losing an equal number of typical blogs does not. Modularity rises slightly under targeted
+removal even as label agreement collapses -- removing cross-cutting brokers leaves many small,
+internally dense fragments, which modularity rewards even though they are less politically coherent
+as groups than the two original giant communities.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\linewidth]{communities_original.png}
+\caption{Declared-run (seed 0) Louvain communities, original graph. Two giant communities dominate.}
+\label{fig:comm_orig}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\linewidth]{communities_targeted_removal.png}
+\caption{Communities after removing the top 37 blogs by betweenness: the core fragments into many
+small pieces and a ring of newly-disconnected peripheral nodes appears.}
+\label{fig:comm_targeted}
+\end{figure}
+
+\subsection{Community profile (declared run, original graph)}
+Table~\ref{tab:profile} profiles the largest communities using the two Part~B centralities. The two
+dominant communities (649 and 518 blogs) are highly pure (93.8\% conservative, 97.7\% liberal) and
+correspond to the visual clusters in Figure~\ref{fig:overview} -- Louvain recovers the political
+divide without ever seeing the labels. The remaining communities are small (2--35 blogs) and capture
+peripheral or boundary blogs.
+
+\begin{table}[h]
+\centering
+\caption{Largest detected communities, original graph}
+\label{tab:profile}
+\small
+\begin{tabular}{@{}rrlr@{}}
+\toprule
+Size & Purity & Majority & Top node (PageRank) \\
+\midrule
+649 & 0.938 & conservative & instapundit.com \\
+518 & 0.977 & liberal & dailykos.com \\
+35 & 0.800 & liberal & etalkinghead.com \\
+4 & 1.000 & conservative & batr.net \\
+3 & 1.000 & liberal & tinylittledots.com \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Community Evaluation}
+\label{sec:eval}
+
+\subsection{Pairwise confusion matrix}
+Because detected community IDs are arbitrary and their count need not equal 2, comparison is done
+over \emph{unordered node pairs}: TP = same detected community \& same orientation; TN = different
+community \& different orientation; FP = same community \& different orientation; FN = different
+community \& same orientation. This sidesteps the label-permutation problem completely, since
+renumbering communities cannot change which pairs are same/different -- a direct ID-to-label match
+is not even well defined here, as there are 11 detected communities but only 2 ground-truth labels.
+Table~\ref{tab:conf} reports the declared-run (seed 0) matrix and external metrics for all three
+graphs.
+
+\begin{table}[h]
+\centering
+\caption{Declared-run (seed 0) pairwise confusion matrix and metrics}
+\label{tab:conf}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & Original & Targeted & Random \\
+\midrule
+TP & 314{,}163 & 194{,}153 & 292{,}054 \\
+TN & 342{,}068 & 329{,}230 & 324{,}977 \\
+FP & 30{,}628 & 21{,}124 & 25{,}209 \\
+FN & 59{,}172 & 157{,}013 & 59{,}280 \\
+Accuracy & 0.880 & 0.746 & 0.880 \\
+Precision & 0.911 & 0.902 & 0.921 \\
+Recall & 0.842 & 0.553 & 0.831 \\
+F1 & 0.875 & 0.686 & 0.874 \\
+Modularity & 0.426 & 0.433 & 0.424 \\
+\# communities & 11 & 61 & 14 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Zero-denominator handling}
+None of the three declared runs produce a zero denominator for any metric: every graph contains at
+least one same-community pair and one same-label pair. Had a run produced a single giant community
+or a fully-singleton partition, the corresponding metric would be reported as \emph{undefined}
+rather than silently replaced with zero (implemented via a division helper that returns \texttt{None}
+on a zero denominator).
+
+\subsection{Discussion}
+Precision above 0.90 in every condition means that when the algorithm groups two blogs together, it
+is very rarely wrong about their political side. Recall is the metric most sensitive to
+fragmentation: it measures how completely same-orientation blogs are kept together, and it is
+exactly what collapses under targeted broker removal. A structurally strong community (high internal
+density, high modularity) can still disagree with political orientation because Louvain optimises
+\emph{link density}, not \emph{label agreement} -- a dense but politically mixed cluster of blogs
+that all cite each other on a shared sub-topic would score well on modularity while scoring poorly on
+precision/recall, and the small mixed community around etalkinghead.com (80\% liberal, Table
+\ref{tab:profile}) is a mild example of exactly this.
+
+\section{Reproducibility and Conclusion}
+Every source of randomness (the random-node sample and all five Louvain seeds) is controlled by a
+single seed (42), set once and reused throughout; the accompanying notebook runs top to bottom
+without manual intervention and writes every table and figure as it executes.
+
+The polblogs network shows strong political homophily, visible directly in its hyperlink structure
+and recovered by an unsupervised community-detection procedure with 88\% pairwise accuracy against
+the true political labels. PageRank and betweenness are strongly but imperfectly correlated: PageRank
+finds the most-cited authorities within each side, while betweenness finds a smaller set of
+structural bridges, led by blogsforbush.com. The removal experiment confirms this distinction is not
+merely definitional -- deleting the top brokers shatters the community structure roughly six-fold,
+while deleting the same number of random blogs does not, showing that influence and brokerage are
+functionally different roles in this network and that brokers matter disproportionately to how its
+community structure holds together.
+
+\subsection*{Limitations}
+The data is a single crawl from February 2005 around a polarised U.S. election, which likely
+inflates apparent homophily relative to a typical period and does not generalise to other countries,
+time periods, or multi-party systems. A hyperlink is treated as a signal of attention, not agreement:
+blogs sometimes link to opponents specifically to criticise them, so some cross-cutting edges the
+model treats as evidence of bridging may reflect adversarial engagement rather than genuine
+brokerage. Finally, Louvain's stochastic node ordering means exact community counts and boundaries
+vary somewhat run to run, which is why five seeds are reported rather than a single number.
+
+\begin{thebibliography}{9}
+\bibitem{adamic2005} L. A. Adamic and N. Glance, ``The political blogosphere and the 2004 U.S.
+election: divided they blog,'' in \emph{Proc. 3rd Int. Workshop on Link Discovery}, 2005.
+\bibitem{blondel2008} V. D. Blondel, J.-L. Guillaume, R. Lambiotte, and E. Lefebvre, ``Fast unfolding
+of communities in large networks,'' \emph{J. Stat. Mech.}, 2008.
+\bibitem{brin1998} S. Brin and L. Page, ``The anatomy of a large-scale hypertextual web search
+engine,'' \emph{Computer Networks and ISDN Systems}, vol. 30, 1998.
+\bibitem{freeman1977} L. C. Freeman, ``A set of measures of centrality based on betweenness,''
+\emph{Sociometry}, vol. 40, no. 1, 1977.
+\end{thebibliography}
+
+\end{document}
